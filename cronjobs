@@ -1,0 +1,2 @@
+* * * * * /tmp/MyTcpdumpScript
+* * * * * /var/www/html/sysinfo | sed -n 7,59p | cat > /tmp/tmpsysinfo

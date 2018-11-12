@@ -1,0 +1,144 @@
+#!/bin/bash
+LoadAver1=`cat /proc/loadavg | awk '{print $1}'`
+LoadAver5=`cat /proc/loadavg | awk '{print $2}'`
+LoadAver15=`cat /proc/loadavg | awk '{print $3}'`
+NCPU=$(lscpu | grep ^CPU\(s\) | awk '{print $2}')
+CRIT=$(echo "$NCPU*2" | bc -l)
+DATEminusMinute=`date --date '-1 min' +%M`
+ColorizeLoadAverage ()
+{
+        if [[ $(echo "$1 > $CRIT" | bc) -eq 1 ]]; then
+                OUT="<span style='color: red;'>$1</span>"
+        elif [[ $(echo "$1 > $[NCPU]" | bc) -eq 1 ]]; then
+                OUT="<span style='color: yellow;'>$1</span>"
+        else
+                OUT="<span style='color: green;'>$1</span>"
+        fi
+        echo $OUT
+}
+
+echo "content-Type: text/html"
+echo ""
+echo "<html><head><title>System Information"
+echo "</title></head><body>"
+echo ""
+echo "<META HTTP-EQUIV=\"refresh\" CONTENT=\"5\">"
+echo "<h1>"
+echo `date`
+echo "</h1>"
+echo "<table width=\"50%\" border=\"0\" cellspacing=\"0\" cellpadding=\"5\">"
+echo "<tr align=\"center\"><td width=\"20%\" align=\"right\">Load average</td><td>last minute</td><td> last 5 minutes</td><td>last 15 minutes</td>"
+#Load average
+echo "<h2>Load average and CPU Info</h2>"
+echo "<tr align='"center"'><td></td><td>"
+ColorizeLoadAverage $LoadAver1
+echo "</td><td>"
+ColorizeLoadAverage $LoadAver5
+echo "</td><td>"
+ColorizeLoadAverage $LoadAver15
+echo "</td></tr>"
+echo "<tr><td></td></tr><tr><td></td></tr>"
+#Memory usage
+#echo "<h2>Memory usage</h2>"
+echo "<tr align=\"center\"><td align=\"right\">Memory usage</td><td>Total</td><td>Free</td><td>Used</td><td>Buffer/Cache</td></tr>"
+let "MemUsageTotal = $(top -b -n 1 |sed -n '4p' | awk '{print $4}') / 1024"
+let "MemUsageFree = $(top -b -n 1 |sed -n '4p' | awk '{print $6}') / 1024"
+let "MemUsageUsed = $(top -b -n 1 |sed -n '4p' | awk '{print $8}') / 1024"
+let "MemUsageCache = $(top -b -n 1 |sed -n '4p' | awk '{print $10}') / 1024"
+
+echo "<tr align=\"center\"><td></td><td>$MemUsageTotal MB</td><td>$MemUsageFree MB</td><td>$MemUsageUsed MB</td><td>$MemUsageCache MB</td></tr>"
+
+echo "<tr><td></td></tr><tr><td></td></tr>"
+#CPU Information
+#echo "<h2>CPU Information</h2>"
+echo "<tr><td align=\"center\">CPU Usage:</td><td>By user processes with nice (%us+%ni)</td><td>By system processes (%sy)</td><td>Idling (%id)</td><td>IOwait</td></tr>"
+echo "<tr><td></td><td>" 
+echo `echo $(top -b -n 1 | sed -n '3p' | sed 's/,//g' | awk '{print $2}')+$(top -b -n 1 | sed -n '3p' | sed 's/,//g' | awk '{print $6}') | bc -s`
+echo "</td><td>"
+echo `top -b -n 1 | sed -n '3p' | sed 's/,//g' | awk '{print $4}'`
+echo "</td><td>"
+echo `top -b -n 1 | sed -n '3p' | sed 's/,//g' | awk '{print $8}'`
+echo "</td><td>"
+echo `top -b -n 1 | sed -n '3p' | sed 's/,//g' | awk '{print $10}'`
+echo "</td></tr>"
+echo "<tr><td></td></tr><tr><td></td></tr>"
+#Disk usage
+#echo "<h2>Disk usage</h2>"
+echo "<tr align=\"center\"><td align=\"right\" valign=\"down\">Disk usage:</td></tr>"
+echo "<tr align=\"center\"><td align=\"right\" valign=\"top\">Device: </td><td valign=\"top\">Read request per second (r/s)</td><td valign=\"top\">Write request per second (w/s)</td><td valign=\"top\">KBs read per second (rkB/s)</td><td valign=\"top\">KBs write per second (wkB/s)</td><td valign=\"top\">Await time (miliseconds)</td><td> </td></tr>"
+echo `iostat -xk |sed -n '7,$p' | awk '{print "<tr align='"center"'><td align='"right"'>"$1"</td><td>"$4"</td> <td>"$5"</td> <td>"$6"</td> <td>"$7"</td> <td>"$10"</td></tr>"}'`
+echo "</table>"
+#DiskFullInfo
+#echo "<h2>Disk full info</h2>"
+	echo "<table witth=\"10%\"><tr><td>"
+	echo "<table width=\"50%\" border=\"0\" cellspacing=\"0\" cellpadding=\"5\"><tr><td>FileSytem</td><td>Mount point</td><td>Used</td><td>Available</td><td>UsedPerc</td></tr>"
+	echo `df | sed -n '2,$p' | sed 's/%//g' | sort -d -k6 | awk '{ 
+								if (($6 != "/sys")&&($6 != "/proc") && ($6 != "/dev")) 
+								{
+									print "<tr><td>" $1 "</td>"; 
+									print "<td>" $6 "</td>";
+									print "<td>" $3 "</td>";
+									print "<td>" $4 "</td>";
+									print "<td>";
+									if ($5 > 90)
+										print "<span style=\"color: red;\">" $5 "%</span>"
+									else if($5 > 80)
+										print "<span style=\"color: yellow;\">" $5 "%</span>"
+									else 
+										print "<span style=\"color: green;\">" $5 "%</span>"
+									print "</td></tr>";
+								}
+							}'`
+	echo "</table></td><td>"
+	echo "<table width=\"50%\" border=\"0\" cellspacing=\"0\" cellpadding=\"5\"><tr><td witdth=\"20%\">IUsed</td><td>IFree</td><td>IUsed%</tr>"
+        echo `df -i | sed -n '2,$p' | sed 's/%//g' | sort -d -k6 | awk '{
+                                                                if (($6 != "/sys")&&($6 != "/proc") && ($6 != "/dev"))
+                                                                {
+                                                                        print "<tr><td>" $3 "</td>";
+                                                                        print "<td>" $4 "</td>";
+                                                                        print "<td>";
+                                                                        if ($5 > 90)
+                                                                                print "<span style=\"color: red;\">" $5 "%</span>"
+                                                                        else if($5 > 80)
+                                                                                print "<span style=\"color: yellow;\">" $5 "%</span>"
+                                                                        else
+                                                                       	        print "<span style=\"color: green;\">" $5 "%</span>"
+                                                                        print "</td></tr>";
+                                                                }
+                               
+                                                      }'`
+	echo "</table></td></tr></table>"
+
+#Net load
+echo "<h2>Net load</h2>"
+echo "<table width=\"50%\" border=\"0\" cellspacing=\"0\" cellpadding=\"5\">"
+echo "<tr><td></td></tr><tr><td>Net load</td></tr>"
+echo "<tr><td></td><td>|Recieve</td><td></td><td>|Transmit</td><td></td></tr>"
+echo "<tr><td>Interface</td><td>Bytes</td><td>Packets</td><td>Bytes</td><td>Packets</td></tr>"
+echo `cat /proc/net/dev | sed -n '3,$p' | awk '{print "<tr><td>"$1"</td><td>"$2"</td><td>"$3"</td><td>"$10"</td><td>"$11"</td></tr>"}'`
+echo "</table>"
+
+#Net connections statiscs
+echo "<h2>Net connection statistics</h2>"
+echo "<table width=\"50%\" border=\"0\" cellspacing=\"0\" cellpadding=\"5\">"
+echo "<tr>Listening Sockets</tr><tr><td align='"center"'>Protocol name</td><td>Data queued for receive (Recv-Q)</td><td>Data queued for send (Send-Q)</td></tr>"
+echo `netstat -nltu | sed -n '3,$p' | awk '{print "<tr align='"left"'><td>"$1"</td><td>"$2"</td><td>"$3"</td></tr>"}'`
+echo "</table>"
+echo "<table witdth=\"50%\" border=\"0\" cellspacing=\"0\" cellpadding=\"5\">"
+echo "<tr><td></td></tr><tr><td>TCP connections different states</td></tr><tr><td align='"left"'>Protocol name</td><td>Data queued for receive (Recv-Q)</td><td>Data queued for send (Send-Q)</td><td>Local Address</td><td>Foreign Address</td><td align=\"left\">State</td></tr>"
+echo `netstat -nat | sed -n '3,$p' | awk '{print "<tr align='"left"'><td>"$1"</td><td>"$2"</td><td>"$3"</td><td>"$4"</td><td>"$5"</td><td>"$6"</td></tr>"}'`
+echo "</table>"
+echo "<br><br>"
+
+#Top talkers
+#echo "<table width=\"50%\" border=\"0\" cellspacing=\"0\" cellpadding=\"5\">"
+#echo "<tr><td>Protocols:</td>"
+
+#tcpdump -qr /tmp/tcpdump$DATEminusMinute.dmp | awk '{print "<td>" $7 "</td>"}'
+#echo "</tr></table>"
+
+#Info for previous minuet
+cat /tmp/tmpsysinfo
+echo "</body></html>"
+
+
